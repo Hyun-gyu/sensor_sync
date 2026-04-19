@@ -1,59 +1,52 @@
 # Sensor Sync
 
-Teensy 4.1 기반 다중 센서 동기화 시스템 + ROS2 제어 노드
+Teensy 4.1 기반 RGB synchronizer + ROS2 제어 노드입니다.
 
 ## 개요
 
-여러 센서(스테레오 카메라, 이벤트 카메라, LiDAR)를 마이크로초 단위로 정밀하게 동기화하는 하드웨어 트리거 시스템입니다.
+이 패키지는 GPS PPS를 기준으로 Stereo RGB 카메라 트리거를 생성합니다.
+정식 운영 기본 모드는 `gps_pps`이고, GPS 없이도 디버깅할 수 있도록
+`internal_timer` 모드를 유지합니다.
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                      Teensy 4.1                             │
 │                                                             │
-│   Pin 2  ──→  FLIR BFS 스테레오 카메라 x2  (30Hz, 가변)     │
-│   Pin 3  ──→  DAVIS 360 이벤트 카메라      (1Hz)            │
-│   Pin 4  ──→  Velodyne Ultra Puck LiDAR   (1Hz)            │
-│   Pin 11 ──→  오실로스코프 모니터링        (Pin 2 동일)     │
-│   Pin 13 ──→  상태 LED                                      │
+│   Pin 2  ──→  FLIR BFS Stereo RGB x2 trigger output         │
+│   Pin 3  ←──  GPS PPS 1 Hz input                            │
+│   Pin 10 ←──  External trigger input (legacy debug)         │
+│   Pin 11 ──→  Oscilloscope monitor (same as Pin 2)          │
+│   Pin 13 ──→  Status LED                                    │
 │                                                             │
-│   Pin 10 ←──  외부 트리거 입력 (선택)                       │
+│   Event / LiDAR use the GPS PPS direct path separately      │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 ## 디렉토리 구조
 
-```
+```text
 sensor_sync/
 ├── firmware/
-│   └── sync.ino           # Teensy 펌웨어
+│   └── sync.ino
 ├── sensor_sync/
-│   └── sync_node.py       # ROS2 제어 노드
+│   ├── protocol.py
+│   └── sync_node.py
+├── test/
+│   └── test_protocol.py
 ├── package.xml
 ├── setup.py
 └── README.md
 ```
 
----
+## 펌웨어 기본 동작
 
-## 1. Teensy 펌웨어 설치
+- 기본 모드: `gps_pps`
+- 기본 입력: Pin 3 GPS PPS rising edge
+- fallback 모드: `internal_timer`
+- 추가 fallback: `external_trigger` (legacy debug)
+- ROS 연결 시 mode, FPS, start/stop을 제어할 수 있습니다.
 
-### 요구사항
-- [Arduino IDE](https://www.arduino.cc/en/software) 또는 [PlatformIO](https://platformio.org/)
-- [Teensyduino](https://www.pjrc.com/teensy/teensyduino.html) 애드온
-
-### 업로드
-1. Arduino IDE에서 `firmware/sync.ino` 열기
-2. Tools → Board → Teensy 4.1 선택
-3. Tools → USB Type → Serial 선택
-4. Upload 버튼 클릭
-
-### 펌웨어 기본 동작
-- **전원 연결 시**: 1Hz로 자동 시작 (ROS 미연결 시에도 동작)
-- **ROS 연결 시**: ROS 노드에서 FPS 및 start/stop 제어 가능
-
----
-
-## 2. ROS2 노드 빌드
+## ROS2 노드 빌드
 
 ### 요구사항
 - ROS2 Humble
@@ -64,59 +57,79 @@ pip install pyserial
 ```
 
 ### 빌드
+
 ```bash
 cd /root/ros2_ws
 colcon build --packages-select sensor_sync
 source install/setup.bash
 ```
 
----
+## 실행
 
-## 3. 실행
+### 기본 실행
 
-### 기본 실행 (1Hz, 자동 연결)
 ```bash
 ros2 run sensor_sync sync_node
 ```
 
-### FPS 지정
+기본값:
+- `sync_mode:=gps_pps`
+- `fps:=1.0`
+- `auto_connect:=true`
+- 현재 기본 펄스폭(`10 ms`) 기준 보수적 지원 범위: `1-60 Hz`
+
+### RGB FPS 지정
+
 ```bash
 ros2 run sensor_sync sync_node --ros-args -p fps:=30.0
 ```
 
+### internal timer 디버깅 모드
+
+```bash
+ros2 run sensor_sync sync_node --ros-args -p sync_mode:=internal_timer -p fps:=10.0
+```
+
 ### 시리얼 포트 지정
+
 ```bash
 ros2 run sensor_sync sync_node --ros-args -p port:=/dev/ttyACM0 -p fps:=30.0
 ```
 
 ### 모든 파라미터
+
 | 파라미터 | 기본값 | 설명 |
 |---------|--------|------|
 | `port` | `/dev/ttyACM0` | Teensy 시리얼 포트 |
 | `baud` | `115200` | 시리얼 통신 속도 |
-| `fps` | `1.0` | 스테레오 카메라 FPS (1-120) |
+| `fps` | `1.0` | Stereo RGB target FPS (1-60, current conservative limit) |
+| `sync_mode` | `gps_pps` | `gps_pps`, `internal_timer`, `external_trigger` |
 | `auto_connect` | `true` | 시작 시 자동 연결 |
 
----
-
-## 4. ROS2 인터페이스
+## ROS2 인터페이스
 
 ### 서비스
+
 | 서비스 | 타입 | 설명 |
 |--------|------|------|
 | `~/start` | `std_srvs/Trigger` | 동기화 시작 |
 | `~/stop` | `std_srvs/Trigger` | 동기화 중지 |
-| `~/trigger` | `std_srvs/Trigger` | 단일 트리거 발생 |
+| `~/trigger` | `std_srvs/Trigger` | 단일 RGB 트리거 발생 |
 | `~/connect` | `std_srvs/Trigger` | Teensy 연결 |
 | `~/disconnect` | `std_srvs/Trigger` | Teensy 연결 해제 |
 
 ### 토픽
+
 | 토픽 | 타입 | 설명 |
 |------|------|------|
-| `~/status` | `std_msgs/String` | 연결 및 동작 상태 |
-| `~/current_fps` | `std_msgs/Float32` | 현재 설정된 FPS |
+| `~/status` | `std_msgs/String` | 연결/동작/모드/PPS 상태 요약 |
+| `~/current_fps` | `std_msgs/Float32` | 현재 적용된 FPS |
+| `~/active_mode` | `std_msgs/String` | 현재 활성 모드 |
+| `~/pps_locked` | `std_msgs/Bool` | GPS PPS lock 상태 |
+| `~/pps_age_ms` | `std_msgs/Int32` | 마지막 PPS 이후 경과 시간 |
 
 ### 사용 예시
+
 ```bash
 # 동기화 시작
 ros2 service call /sync_controller/start std_srvs/srv/Trigger
@@ -124,110 +137,92 @@ ros2 service call /sync_controller/start std_srvs/srv/Trigger
 # 동기화 중지
 ros2 service call /sync_controller/stop std_srvs/srv/Trigger
 
-# FPS 변경 (실행 중에도 가능)
+# FPS 변경
 ros2 param set /sync_controller fps 60.0
+
+# GPS PPS -> internal timer 모드 전환
+ros2 param set /sync_controller sync_mode internal_timer
 
 # 상태 확인
 ros2 topic echo /sync_controller/status
+ros2 topic echo /sync_controller/pps_locked
 ```
 
----
+## 동작 원리
 
-## 5. 동작 원리
+### 기본 운영 모드: GPS PPS
 
-### 단일 마스터 타이머 동기화
-```
-마스터 타이머 (Stereo FPS 기준)
+```text
+GPS PPS 1 Hz (Pin 3 input)
         │
-        ├──→ 매 프레임: Pin 2 트리거 (스테레오 카메라)
-        │
-        └──→ 매 N프레임: Pin 3, 4 동시 트리거 (DAVIS + Velodyne)
-             (N = Stereo FPS / 1Hz)
+        └──→ Teensy가 초 경계를 기준으로 잡음
+              │
+              └──→ Pin 2 RGB trigger Hz 생성
 ```
 
-- **Drift 없음**: 모든 트리거가 단일 타이머에서 파생
-- **정확한 동기화**: 1Hz 센서 트리거는 항상 스테레오 프레임과 일치
+- RGB trigger는 GPS 초 경계에 정렬되도록 생성됩니다.
+- ROS에서는 `pps_locked`, `pps_age_ms`로 상태를 볼 수 있습니다.
+- 현재 `TRIGGER_PULSE_US=10000` 기준으로는 `60 Hz`를 보수적 상한으로 둡니다.
+- FLIR 전기적 검증 후 pulse width를 줄이면 상한은 다시 올릴 수 있습니다.
 
-### 예시: 30Hz 설정
-| 센서 | 핀 | 주파수 | 트리거 타이밍 |
-|------|-----|--------|--------------|
-| 스테레오 카메라 | Pin 2 | 30Hz | 매 프레임 |
-| DAVIS 360 | Pin 3 | 1Hz | 매 30번째 프레임 |
-| Velodyne | Pin 4 | 1Hz | 매 30번째 프레임 (Pin 3과 동시) |
+### 디버그 모드: internal timer
 
-### 트리거 신호 특성
-- **전압**: 3.3V (Teensy 4.1 출력)
-- **펄스 폭**: 10ms (설정 가능)
-- **엣지**: Rising edge 트리거
+- GPS 없이도 RGB trigger를 단독 테스트할 수 있습니다.
+- 카메라 bring-up이나 배선 디버깅에 사용합니다.
+- 정식 acquisition 기본 모드는 아닙니다.
 
----
+## 하드웨어 연결
 
-## 6. 하드웨어 연결
-
-### 핀 배치
 | Teensy Pin | 연결 대상 | 신호 방향 | 비고 |
 |------------|----------|----------|------|
-| Pin 2 | FLIR BFS GPIO (트랜지스터 경유) | OUTPUT | 30Hz 트리거 |
-| Pin 3 | DAVIS 360 SIGNAL_IN | OUTPUT | 1Hz 트리거 |
-| Pin 4 | Velodyne SYNC_IN | OUTPUT | 1Hz 트리거 |
-| Pin 10 | 외부 트리거 소스 | INPUT | 선택사항 |
-| Pin 11 | 오실로스코프 | OUTPUT | 디버깅용 |
+| Pin 2 | FLIR BFS GPIO (level shifter 경유) | OUTPUT | RGB trigger |
+| Pin 3 | GPS PPS | INPUT | 기본 시간 기준 |
+| Pin 10 | 외부 트리거 소스 | INPUT | legacy debug |
+| Pin 11 | 오실로스코프 | OUTPUT | RGB trigger monitor |
 | Pin 13 | 온보드 LED | OUTPUT | 상태 표시 |
 | GND | 공통 그라운드 | - | 필수 |
 
 ### 주의사항
-- FLIR 카메라는 5V 트리거가 필요할 수 있음 → 트랜지스터 레벨 시프터 사용
-- 모든 장치의 GND를 공통으로 연결
 
----
+- FLIR 카메라는 5V trigger가 필요할 수 있으므로 레벨 시프터를 사용합니다.
+- GPS PPS와 Teensy 입력 전압 레벨 호환 여부를 확인합니다.
+- 모든 장치의 GND를 공통으로 연결합니다.
 
-## 7. 시리얼 명령어 (디버깅용)
+## 시리얼 명령어
 
-Teensy에 직접 시리얼 명령어를 보낼 수 있습니다:
+Teensy에 직접 시리얼 명령어를 보낼 수 있습니다.
 
 | 명령어 | 단축키 | 설명 |
 |--------|--------|------|
 | `START` | `S` | 동기화 시작 |
 | `STOP` | `X` | 동기화 중지 |
-| `TRIGGER` | `T` | 단일 트리거 |
-| `FPS n` | `F n` | FPS 설정 (예: `FPS 30`) |
+| `TRIGGER` | `T` | 단일 RGB 트리거 |
+| `FPS n` | `F n` | FPS 설정 |
+| `MODE GPS_PPS` | `G` | GPS PPS 모드 |
+| `MODE INTERNAL` | `I` | 내부 타이머 모드 |
+| `MODE EXTERNAL` | `E` | 외부 트리거 모드 |
 | `STATUS` | `?` | 상태 출력 |
+| `RESET` | `R` | 프레임/카운터 리셋 |
 | `HELP` | `H` | 도움말 |
-| `RESET` | `R` | 프레임 카운터 리셋 |
-| `INTERNAL` | `I` | 내부 타이머 모드 |
-| `EXTERNAL` | `E` | 외부 트리거 모드 |
 
 ```bash
-# 시리얼 모니터 연결 (115200 baud)
 screen /dev/ttyACM0 115200
-# 또는
-minicom -D /dev/ttyACM0 -b 115200
 ```
 
----
+## 테스트
 
-## 8. 트러블슈팅
+### 프로토콜 단위 테스트
 
-### Teensy가 인식되지 않음
 ```bash
-# 연결된 장치 확인
-ls /dev/ttyACM* /dev/ttyUSB*
-
-# 권한 문제 시
-sudo usermod -a -G dialout $USER
-# 로그아웃 후 재로그인
+cd /root/ros2_ws/src/sensor_sync
+PYTHONPATH=. python3 -m unittest discover -s test -p 'test_*.py'
 ```
 
-### 오실로스코프에서 신호가 안 보임
-1. **연결 확인**: GND → Teensy GND, 프로브 → Pin 2 (5V 아님!)
-2. **트리거 설정**: Auto 모드, Rising edge, 1.5V 레벨
-3. **시간축**: 100ms/div 이상 (1Hz 신호 확인용)
+### GPS PPS lock 디버깅
 
-### ROS 노드가 연결 실패
 ```bash
-# Teensy 포트 확인
-ls -la /dev/ttyACM*
-
-# 다른 프로세스가 포트 점유 중인지 확인
-fuser /dev/ttyACM0
+ros2 topic echo /sync_controller/pps_locked
+ros2 topic echo /sync_controller/pps_age_ms
 ```
+
+Pin 3 입력 배선, GND 공통, PPS 전압 레벨을 먼저 확인합니다.
