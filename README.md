@@ -12,10 +12,10 @@ Teensy 4.1 기반 RGB synchronizer + ROS2 제어 노드입니다.
 ┌─────────────────────────────────────────────────────────────┐
 │                      Teensy 4.1                             │
 │                                                             │
-│   Pin 2  ──→  FLIR BFS Stereo RGB x2 trigger output         │
+│   Pin 6  ──→  FLIR BFS Stereo RGB x2 trigger output         │
 │   Pin 3  ←──  GPS PPS 1 Hz input                            │
 │   Pin 10 ←──  External trigger input (legacy debug)         │
-│   Pin 11 ──→  Oscilloscope monitor (same as Pin 2)          │
+│   Pin 11 ──→  Oscilloscope monitor (same as Pin 6)          │
 │   Pin 13 ──→  Status LED                                    │
 │                                                             │
 │   Event / LiDAR use the GPS PPS direct path separately      │
@@ -157,7 +157,7 @@ GPS PPS 1 Hz (Pin 3 input)
         │
         └──→ Teensy가 초 경계를 기준으로 잡음
               │
-              └──→ Pin 2 RGB trigger Hz 생성
+              └──→ Pin 6 RGB trigger Hz 생성
 ```
 
 - RGB trigger는 GPS 초 경계에 정렬되도록 생성됩니다.
@@ -175,7 +175,7 @@ GPS PPS 1 Hz (Pin 3 input)
 
 | Teensy Pin | 연결 대상 | 신호 방향 | 비고 |
 |------------|----------|----------|------|
-| Pin 2 | FLIR BFS GPIO (level shifter 경유) | OUTPUT | RGB trigger |
+| Pin 6 | FLIR BFS GPIO (level shifter 경유) | OUTPUT | RGB trigger |
 | Pin 3 | GPS PPS | INPUT | 기본 시간 기준 |
 | Pin 10 | 외부 트리거 소스 | INPUT | legacy debug |
 | Pin 11 | 오실로스코프 | OUTPUT | RGB trigger monitor |

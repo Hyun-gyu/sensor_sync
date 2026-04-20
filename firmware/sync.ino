@@ -3,7 +3,7 @@
  *
  * Final target behavior:
  * - Pin 3 receives GPS PPS (1 Hz) as the primary timing source
- * - Pin 2 generates RGB trigger pulses derived from PPS
+ * - Pin 6 generates RGB trigger pulses derived from PPS
  * - Internal timer mode stays available for debugging without GPS
  * - External trigger mode is kept as a legacy/manual fallback
  */
@@ -17,7 +17,7 @@
 #define TRIGGER_PULSE_US 10000
 #define GPS_PPS_TIMEOUT_MS 1500
 
-const int stereoTriggerPin = 2;
+const int stereoTriggerPin = 6;
 const int gpsPpsInputPin = 3;
 const int extTriggerPin = 10;
 const int syncOutPin = 11;
