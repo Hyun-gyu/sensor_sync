@@ -10,6 +10,8 @@
 
 #include <IntervalTimer.h>
 
+#define FIRMWARE_NAME "sensor_sync_teensy"
+#define FIRMWARE_VERSION "2026-04-20"
 #define DEFAULT_STEREO_FPS 1.0f
 #define MIN_FPS 1.0f
 #define MAX_FPS 60.0f
@@ -42,16 +44,18 @@ volatile uint32_t stereoIntervalMicros = 1000000;
 volatile uint32_t lastPpsMillis = 0;
 
 float requestedStereoFps = DEFAULT_STEREO_FPS;
+bool startupBannerPrinted = false;
 
 void processSerialCommand();
 void printHelp();
 void printStatus();
 void printStateLine();
+void printStartupBanner();
 void startSync();
 void stopSync();
 void applyRuntimeMode();
 void setTriggerMode(TriggerMode newMode);
-void setStereoFPS(float fps);
+void setStereoFPS(float fps, bool emitAck = true);
 void triggerStereoCamera();
 void clearOutputs();
 
@@ -148,7 +152,7 @@ void externalTriggerISR() {
   triggerStereoCamera();
 }
 
-void setStereoFPS(float fps) {
+void setStereoFPS(float fps, bool emitAck) {
   if (fps < MIN_FPS) {
     fps = MIN_FPS;
   }
@@ -165,10 +169,12 @@ void setStereoFPS(float fps) {
     stereoTimer.begin(stereoTimerCallback, stereoIntervalMicros);
   }
 
-  Serial.print("ACK fps=");
-  Serial.print((float)targetFramesPerSecond, 2);
-  Serial.print(" interval_us=");
-  Serial.println(stereoIntervalMicros);
+  if (emitAck) {
+    Serial.print("ACK fps=");
+    Serial.print((float)targetFramesPerSecond, 2);
+    Serial.print(" interval_us=");
+    Serial.println(stereoIntervalMicros);
+  }
 }
 
 void applyRuntimeMode() {
@@ -278,6 +284,32 @@ void printHelp() {
   Serial.println("  HELP / H               Print this help");
 }
 
+void printStartupBanner() {
+  if (!Serial || startupBannerPrinted) {
+    return;
+  }
+
+  Serial.println();
+  Serial.println("BOOT_OK upload_ok=1");
+  Serial.print("firmware=");
+  Serial.print(FIRMWARE_NAME);
+  Serial.print(" version=");
+  Serial.println(FIRMWARE_VERSION);
+  Serial.println("Teensy 4.1 RGB synchronizer ready");
+  Serial.println("GPS PPS input: Pin 3");
+  Serial.println("RGB trigger output: Pin 6");
+  Serial.println("Fallback mode: internal_timer");
+  Serial.print("READY mode=");
+  Serial.print(modeToString(triggerMode));
+  Serial.print(" fps=");
+  Serial.print((float)targetFramesPerSecond, 2);
+  Serial.print(" running=");
+  Serial.println(isRunning ? 1 : 0);
+  printHelp();
+
+  startupBannerPrinted = true;
+}
+
 void processSerialCommand() {
   if (!Serial.available()) {
     return;
@@ -296,7 +328,7 @@ void processSerialCommand() {
     Serial.println("ACK trigger=1");
   } else if (cmd.startsWith("FPS ") || cmd.startsWith("F ")) {
     float fps = cmd.substring(cmd.indexOf(' ') + 1).toFloat();
-    setStereoFPS(fps);
+    setStereoFPS(fps, true);
   } else if (cmd == "GPS" || cmd == "G" || cmd == "GPS_PPS" || cmd == "MODE GPS_PPS" || cmd == "MODE GPS") {
     setTriggerMode(MODE_GPS_PPS);
   } else if (cmd == "INTERNAL" || cmd == "I" || cmd == "INTERNAL_TIMER" || cmd == "MODE INTERNAL" || cmd == "MODE INTERNAL_TIMER") {
@@ -333,13 +365,8 @@ void setup() {
 
   attachInterrupt(digitalPinToInterrupt(gpsPpsInputPin), gpsPpsISR, RISING);
 
-  setStereoFPS(DEFAULT_STEREO_FPS);
-
-  Serial.println();
-  Serial.println("Teensy 4.1 RGB synchronizer ready");
-  Serial.println("Default mode: gps_pps (Pin 3 <- GPS PPS input)");
-  Serial.println("Fallback mode: internal_timer");
-  printHelp();
+  setStereoFPS(DEFAULT_STEREO_FPS, false);
+  printStartupBanner();
 
   for (int i = 0; i < 3; i++) {
     digitalWriteFast(ledPin, HIGH);
@@ -353,6 +380,7 @@ void setup() {
 }
 
 void loop() {
+  printStartupBanner();
   processSerialCommand();
 
   if (triggerMode == MODE_GPS_PPS && ppsLocked) {

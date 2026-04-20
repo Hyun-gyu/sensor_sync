@@ -78,6 +78,26 @@ ros2 run sensor_sync sync_node
 - `auto_connect:=true`
 - 현재 기본 펄스폭(`10 ms`) 기준 보수적 지원 범위: `1-60 Hz`
 
+### 업로드 확인용 시리얼 모니터 메시지
+
+Teensy에 firmware가 정상 업로드되고 시리얼 모니터가 열리면, 아래와 비슷한 boot banner가 한 번 출력됩니다.
+
+```text
+BOOT_OK upload_ok=1
+firmware=sensor_sync_teensy version=2026-04-20
+Teensy 4.1 RGB synchronizer ready
+GPS PPS input: Pin 3
+RGB trigger output: Pin 6
+Fallback mode: internal_timer
+READY mode=gps_pps fps=1.00 running=0
+```
+
+이 메시지가 보이면 최소한 아래는 정상이라고 봐도 됩니다.
+- firmware upload 완료
+- USB serial 연결 성공
+- Teensy main loop 진입 성공
+- 현재 build가 `Pin 3 PPS input / Pin 6 RGB trigger output` 기준으로 올라감
+
 ### RGB FPS 지정
 
 ```bash
