@@ -91,6 +91,8 @@ class SyncControllerNode(Node):
         self.pub_mode = self.create_publisher(String, "~/active_mode", 10)
         self.pub_pps_locked = self.create_publisher(Bool, "~/pps_locked", 10)
         self.pub_pps_age_ms = self.create_publisher(Int32, "~/pps_age_ms", 10)
+        self.pub_stereo_frames = self.create_publisher(Int32, "~/stereo_frames", 10)
+        self.pub_pps_count = self.create_publisher(Int32, "~/pps_count", 10)
 
         self.status_timer = self.create_timer(1.0, self.publish_status)
 
@@ -381,6 +383,14 @@ class SyncControllerNode(Node):
         pps_age_msg = Int32()
         pps_age_msg.data = int(self.pps_age_ms)
         self.pub_pps_age_ms.publish(pps_age_msg)
+
+        stereo_frames_msg = Int32()
+        stereo_frames_msg.data = int(self.stereo_frames)
+        self.pub_stereo_frames.publish(stereo_frames_msg)
+
+        pps_count_msg = Int32()
+        pps_count_msg.data = int(self.pps_count)
+        self.pub_pps_count.publish(pps_count_msg)
 
     def destroy_node(self):
         """Shutdown hook."""

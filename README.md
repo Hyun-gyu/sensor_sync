@@ -147,6 +147,8 @@ ros2 run sensor_sync sync_node --ros-args -p port:=/dev/ttyACM0 -p fps:=30.0
 | `~/active_mode` | `std_msgs/String` | 현재 활성 모드 |
 | `~/pps_locked` | `std_msgs/Bool` | GPS PPS lock 상태 |
 | `~/pps_age_ms` | `std_msgs/Int32` | 마지막 PPS 이후 경과 시간 |
+| `~/stereo_frames` | `std_msgs/Int32` | Teensy가 생성한 RGB trigger/frame counter |
+| `~/pps_count` | `std_msgs/Int32` | Teensy가 감지한 GPS PPS counter |
 
 ### 사용 예시
 
@@ -166,6 +168,8 @@ ros2 param set /sync_controller sync_mode internal_timer
 # 상태 확인
 ros2 topic echo /sync_controller/status
 ros2 topic echo /sync_controller/pps_locked
+ros2 topic echo /sync_controller/stereo_frames
+ros2 topic echo /sync_controller/pps_count
 ```
 
 ## 동작 원리
